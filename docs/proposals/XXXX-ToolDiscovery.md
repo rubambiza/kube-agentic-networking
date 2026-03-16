@@ -1,8 +1,8 @@
 # Tool Discovery for KAN
 
-Date: 16th March 2026
-Authors: @rubambiza, @evaline-ju, @david-martin, @guicassolato
-Status: Provisional
+Date: 16th March 2026<br/>
+Authors: @rubambiza, @evaline-ju, @david-martin, @guicassolato<br/>
+Status: Provisional<br/>
 
 > [!CAUTION]
 > This API is in a provisional state. It is subject to change and should not be
