@@ -104,10 +104,9 @@ tool, and emits a Warning event on the `XBackend`. The invalid tool does not
 appear in `status.discoveredTools`, preventing it from being referenced in
 policies or reaching agents.
 
-## What Has Changed Since the February 2026 Proposal
+## Context
 
-This proposal builds on the tool discovery proposal from February 2026, updated
-for three developments:
+Three recent developments inform this proposal's design:
 
 **XBackend is in flux.** KAN is actively reconsidering XBackend's shape to
 align with the AI Gateway WG's Backend resource (gateway-api PR #4488). Issue
@@ -180,9 +179,9 @@ The discovery controller sets the following conditions on `XBackend`:
 
 | Type | Status | Reason | Meaning |
 |------|--------|--------|---------|
-| `ToolsDiscovered` | `True` | `DiscoverySucceeded` | tools/list succeeded, tools are current |
-| `ToolsDiscovered` | `False` | `DiscoveryFailed` | tools/list call failed (backend unreachable, protocol error) |
-| `ToolsDiscovered` | `False` | `SchemaValidationFailed` | One or more tools had invalid schemas and were excluded |
+| `ToolsDiscovered` | `True` | `DiscoverySucceeded` | tools/list succeeded, all tools valid |
+| `ToolsDiscovered` | `True` | `PartiallyValid` | tools/list succeeded, but some tools had invalid schemas and were excluded |
+| `ToolsDiscovered` | `False` | `DiscoveryFailed` | tools/list call itself failed (backend unreachable, protocol error) |
 
 ### Complete Example
 
@@ -223,8 +222,10 @@ metadata:
   name: agent-weather-access
   namespace: default
 spec:
-  targetRef:
-    name: weather-service
+  targetRefs:
+    - group: agentic.prototype.x-k8s.io
+      kind: XBackend
+      name: weather-service
   rules:
     - name: allow-forecast
       source:
@@ -232,16 +233,28 @@ spec:
         serviceAccount:
           name: my-agent
           namespace: default
-      tools:
-        - "get_forecast"
-        - "get_humidity"  # Not discovered on backend
+      authorization:
+        type: InlineTools
+        tools:
+          - "get_forecast"
+          - "get_humidity"  # Not discovered on backend
 status:
-  conditions:
-    - type: Valid
-      status: "False"
-      reason: "ToolNotFound"
-      message: "Tool 'get_humidity' not found on XBackend 'weather-service'"
-      lastTransitionTime: "2026-03-16T10:31:00Z"
+  ancestors:
+    - ancestorRef:
+        group: agentic.prototype.x-k8s.io
+        kind: XBackend
+        name: weather-service
+      controllerName: agentic.prototype.x-k8s.io/controller
+      conditions:
+        - type: Accepted
+          status: "True"
+          reason: "Accepted"
+          lastTransitionTime: "2026-03-16T10:31:00Z"
+        - type: ToolValidation
+          status: "False"
+          reason: "ToolNotFound"
+          message: "Tool 'get_humidity' not found on XBackend 'weather-service'"
+          lastTransitionTime: "2026-03-16T10:31:00Z"
 ```
 
 ## Implementation
@@ -270,7 +283,7 @@ The discovery logic lives in `pkg/discovery/` within the existing
 ### AccessPolicy Validation
 
 The existing AccessPolicy reconciler is extended to cross-reference
-`rules[].tools[]` against `XBackend.status.discoveredTools`:
+`rules[].authorization.tools[]` against `XBackend.status.discoveredTools`:
 
 - If a tool name doesn't match, set a Warning condition on the
   `XAccessPolicy` (not rejection — the tool may not be discovered yet).
@@ -389,4 +402,3 @@ would establish a natural ownership scope for `pkg/discovery/`.
 - [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25) — Current MCP spec with tool annotations, pagination, schema requirements
 - [Kuadrant/mcp-gateway issue #662](https://github.com/Kuadrant/mcp-gateway/issues/662) — Schema validation gap
 - [Kuadrant/mcp-gateway PR #329](https://github.com/Kuadrant/mcp-gateway/pull/329) — tools/list_changed support
-- [February 2026 tool discovery proposal](../../kan-tool-discovery-proposal.md) — Original broader proposal this builds on
