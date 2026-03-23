@@ -61,7 +61,7 @@ xbackend` tells you nothing about the backend's capabilities.
 
 **3. Invalid schemas propagate silently.** When a backend MCP server exposes
 tools with invalid JSON schemas, the problem is invisible until an agent tries
-to use the tools. For example, Kuadrant/mcp-gateway issue #662 documents a case
+to use the tools. For example, [Kuadrant/mcp-gateway issue #662](https://github.com/Kuadrant/mcp-gateway/issues/662) documents a case
 where a backend with an invalid `inputSchema` caused an agent to fail with a 400
 error (`"JSON schema is invalid. It must match JSON Schema draft 2020-12"`).
 Without validation at the discovery layer, broken backends silently poison the
@@ -109,8 +109,8 @@ policies or reaching agents.
 Three recent developments inform this proposal's design:
 
 **XBackend is in flux.** KAN is actively reconsidering XBackend's shape to
-align with the AI Gateway WG's Backend resource (gateway-api PR #4488). Issue
-#161 tracks whether to drop `Service` as a target type; issue #162 questions
+align with the AI Gateway WG's Backend resource ([gateway-api PR #4488](https://github.com/kubernetes-sigs/gateway-api/pull/4488)). [Issue
+#161](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/161) tracks whether to drop `Service` as a target type; [issue #162](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/162) questions
 whether `path` belongs on XBackend or in protocol-specific options. This
 proposal's design is resilient to these changes: it extends `XBackend.status`
 (observed state), not `XBackend.spec`, so it works regardless of how the spec
@@ -123,11 +123,11 @@ evolves.
 2025-03-26) was not incorporated in the original proposal.
 
 **Kuadrant/mcp-gateway validates the approach.** Three developments in the MCP
-Gateway directly inform this proposal: `tools/list_changed` support (PR #329)
-validates the hybrid polling + notification approach; issue #662 (invalid
+Gateway directly inform this proposal: `tools/list_changed` support ([PR #329](https://github.com/Kuadrant/mcp-gateway/pull/329))
+validates the hybrid polling + notification approach; [issue #662](https://github.com/Kuadrant/mcp-gateway/issues/662) (invalid
 schemas breaking downstream agents) motivates schema validation at the discovery
 layer; and the `MCPServerRegistration` CRD's evolution toward richer backend
-metadata (PR #500) confirms that a count-only status is insufficient for policy
+metadata ([PR #500](https://github.com/Kuadrant/mcp-gateway/pull/500)) confirms that a count-only status is insufficient for policy
 validation.
 
 ## API
@@ -318,13 +318,13 @@ deployment and simplifies RBAC.
 
 The MCP Gateway's broker connects to upstream MCP servers and calls
 `tools/list` on a reconciliation loop, maintaining an in-memory registry. It
-supports `tools/list_changed` for reactive re-discovery (PR #329) and prefixes
+supports `tools/list_changed` for reactive re-discovery ([PR #329](https://github.com/Kuadrant/mcp-gateway/pull/329)) and prefixes
 tool names for federation. Its `MCPServerRegistration` CRD status stores only a
 tool count — sufficient for the gateway's needs but too minimal for KAN's
 policy validation use case.
 
 - *Pro:* Production-tested discovery loop with list_changed support.
-- *Pro:* Schema validation gap (issue #662) validates our design choice to
+- *Pro:* Schema validation gap ([issue #662](https://github.com/Kuadrant/mcp-gateway/issues/662)) validates our design choice to
   validate at the discovery layer.
 - *Con:* CRD status (count only) is insufficient for policy validation.
 - *Con:* In-memory tool registry doesn't surface tools to kubectl or other
@@ -371,7 +371,7 @@ separate CRD a localized change.
 ### Phase 1
 
 1. **Is `XBackend.status` the right location?** Given the ongoing XBackend
-   shape discussions (#161, #162), should discovery wait? We argue no. Status
+   shape discussions ([#161](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/161), [#162](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/162)), should discovery wait? We argue no. Status
    constitutes observed state that is independent of spec changes.
 2. **MCP client library.** Should KAN depend on `github.com/mark3labs/mcp-go`?
    It is the most mature Go MCP client.
