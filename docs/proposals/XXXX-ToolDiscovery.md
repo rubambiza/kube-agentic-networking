@@ -14,17 +14,19 @@ KAN has no mechanism to discover what tools an MCP backend exposes. Operators
 must manually enumerate tool names in `XAccessPolicy` rules, and there is no
 feedback loop when tools are added, removed, or misconfigured on backends.
 
-This proposal adds active tool discovery to KAN: a controller that connects to
-MCP backends, calls `tools/list`, validates the results, and surfaces discovered
-tools in `XBackend.status`. This enables policy validation against real backend
-state, operator visibility via `kubectl`, and a foundation for future
-capabilities like response filtering.
+This proposal adds optional, opt-in tool discovery to KAN: a controller that
+connects to MCP backends, calls `tools/list`, validates the results, and
+surfaces discovered tools in `XBackend.status`. This enables policy validation
+against real backend state, operator visibility via `kubectl`, and a foundation
+for future capabilities like response filtering. Discovery is advisory (i.e.,
+it enhances observability but does not affect policy enforcement). Backends
+without discovery enabled continue to work exactly as they do today.
 
 ## Non-Goals
 
 - **`tools/list` response filtering.** Filtering the `tools/list` response
   based on caller identity (so agents only see tools they're authorized to call)
-  is a natural next step but is a separate proposal.
+  is a natural next step but would require a separate proposal.
 - **Tool prefixing / federation.** Disambiguating tools with the same name
   across multiple backends (e.g., via prefix namespacing) is out of scope.
 - **Full tool schema storage in CRD status.** Storing `inputSchema` and
@@ -186,11 +188,13 @@ The discovery controller sets the following conditions on `XBackend`:
 ### Complete Example
 
 ```yaml
-apiVersion: agentic.networking.x-k8s.io/v0alpha0
+apiVersion: agentic.prototype.x-k8s.io/v0alpha0
 kind: XBackend
 metadata:
   name: weather-service
   namespace: default
+  annotations:
+    agentic.prototype.x-k8s.io/enable-discovery: "true"
 spec:
   mcp:
     serviceName: weather-mcp
@@ -216,7 +220,7 @@ status:
 An `XAccessPolicy` referencing a non-existent tool receives a Warning:
 
 ```yaml
-apiVersion: agentic.networking.x-k8s.io/v0alpha0
+apiVersion: agentic.prototype.x-k8s.io/v0alpha0
 kind: XAccessPolicy
 metadata:
   name: agent-weather-access
@@ -249,11 +253,7 @@ status:
         - type: Accepted
           status: "True"
           reason: "Accepted"
-          lastTransitionTime: "2026-03-16T10:31:00Z"
-        - type: ToolValidation
-          status: "False"
-          reason: "ToolNotFound"
-          message: "Tool 'get_humidity' not found on XBackend 'weather-service'"
+          message: "Policy accepted; unverified tools: get_humidity (not found in discovered tools for XBackend 'weather-service')"
           lastTransitionTime: "2026-03-16T10:31:00Z"
 ```
 
@@ -262,9 +262,16 @@ status:
 ### Discovery Controller
 
 The discovery logic lives in `pkg/discovery/` within the existing
-`agentic-net-controller` binary as a new reconciler. It:
+`agentic-net-controller` binary as a new reconciler. Discovery is opt-in:
+the controller only processes XBackend resources that carry the
+`agentic.prototype.x-k8s.io/enable-discovery: "true"` annotation. Backends
+without this annotation are ignored, incurring zero overhead. The discovery
+controller can also be disabled entirely via a controller flag
+(`--enable-discovery=false`).
 
-1. **Watches** XBackend resources.
+For opted-in backends, it:
+
+1. **Watches** XBackend resources with the discovery annotation.
 2. **Connects** to each backend's MCP endpoint using the `mcp-go` client
    library (`github.com/mark3labs/mcp-go`).
 3. **Calls** `tools/list`, handling pagination via cursor for backends with
@@ -285,19 +292,44 @@ The discovery logic lives in `pkg/discovery/` within the existing
 The existing AccessPolicy reconciler is extended to cross-reference
 `rules[].authorization.tools[]` against `XBackend.status.discoveredTools`:
 
-- If a tool name doesn't match, set a Warning condition on the
-  `XAccessPolicy` (not rejection — the tool may not be discovered yet).
+- If a tool name doesn't match, surface the unverified tool names in the
+  `Accepted` condition's `message` field on the relevant ancestor entry
+  (not rejection — the tool may not be discovered yet). This follows
+  Gateway API convention of using standard condition types rather than
+  introducing domain-specific ones.
 - Validation runs on both AccessPolicy changes and XBackend status changes,
   so stale policies are detected when a backend removes a tool.
 
 ### Phasing
 
-**Phase 1: Discovery.** XBackend status extension, discovery controller, schema
-validation, `list_changed` support, drift detection. This is the core
-deliverable.
+**Phase 1: In-cluster discovery (plain HTTP).** XBackend status extension,
+discovery controller, schema validation, `list_changed` support, drift
+detection. The controller connects to backends using the service name and port
+from `XBackend.spec.mcp` over plain HTTP. This is sufficient for in-cluster
+backends where trust is assumed. In mesh environments (e.g., Istio sidecar on
+the controller pod), mTLS is handled transparently at the infrastructure layer,
+so the plain HTTP implementation covers that case without extra work.
 
-**Phase 2: Policy validation.** AccessPolicy cross-referencing against
-discovered tools. Depends on Phase 1.
+Backends that require authentication for `tools/list` will fail gracefully:
+the XBackend receives a `ToolsDiscovered: False` condition with reason
+`DiscoveryFailed`, and AccessPolicy enforcement continues unaffected. Discovery
+is advisory — it does not gate the data plane. The operator sees an early
+signal that the backend is unreachable to the control plane, but runtime tool
+calls proceed normally as long as the agent's own credentials are valid.
+
+**Phase 2: External backends (TLS and authentication).** Extends the discovery
+controller to connect to backends outside the cluster, requiring TLS and
+potentially a credential reference for `tools/list` calls. The exact mechanism
+(e.g., a `credentialRef` on XBackend) is deferred pending stabilization of the
+Backend spec between KAN and the AI Gateway WG.
+
+**Phase 3: Policy validation.** AccessPolicy cross-referencing against
+discovered tools. When an XBackend has `ToolsDiscovered: False` (discovery
+failed or not yet attempted), any AccessPolicy targeting that backend includes
+a note in the `Accepted` condition message indicating which target backends
+had no discovery data available (e.g., "tools not verified against XBackend
+'weather-service': discovery unavailable"). This ensures operators have
+visibility without blocking policy acceptance.
 
 ### Alternative: Separate Discovery Controller
 
@@ -377,7 +409,7 @@ separate CRD a localized change.
    It is the most mature Go MCP client.
 3. **Default sync interval.** We propose 30s. Configurable via controller flag.
 
-### Phase 2
+### Phase 3
 
 4. **Warning vs. rejection.** Should an AccessPolicy referencing a
    non-existent tool be admitted with a Warning, or rejected? We recommend
@@ -389,7 +421,8 @@ separate CRD a localized change.
 
 This proposal is led by @rubambiza (IBM) with support from @evaline-ju (IBM),
 @david-martin (Red Hat), and @guicassolato (Red Hat). Delivery of Phases 1-2
-would establish a natural ownership scope for `pkg/discovery/`.
+would establish a natural ownership scope for `pkg/discovery/`. Phase 2 is
+deferred pending Backend spec stabilization.
 
 ## References
 
