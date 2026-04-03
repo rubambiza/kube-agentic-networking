@@ -362,7 +362,7 @@ policy validation use case.
 - *Con:* In-memory tool registry doesn't surface tools to kubectl or other
   controllers.
 
-### kagenti-operator AgentCard Controller
+### [kagenti-operator](https://github.com/kagenti/kagenti-operator) AgentCard Controller
 
 The kagenti-operator's AgentCard controller periodically fetches agent
 capability cards from `/.well-known/agent.json` endpoints and caches them in
