@@ -133,7 +133,7 @@ policies or reaching agents.
 Three recent developments inform this proposal's design:
 
 **XBackend is in flux.** KAN is actively reconsidering XBackend's shape to
-align with the AI Gateway WG's Backend resource ([gateway-api PR #4488](https://github.com/kubernetes-sigs/gateway-api/pull/4488)). [Issue
+align with the AI Gateway WG's Backend resource ([gateway-api GEP-4894](https://github.com/kubernetes-sigs/gateway-api/blob/main/geps/gep-4894/index.md)). [Issue
 #161](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/161) tracks whether to drop `Service` as a target type; [issue #162](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/162) questions
 whether `path` belongs on XBackend or in protocol-specific options.
 Additionally, not every backend controller performs discovery — coupling
@@ -470,12 +470,12 @@ controller never rejects a policy or cleans up rules based on discovery data
 **Phase 2: External backends (TLS and authentication).** Extends the discovery
 controller to connect to backends outside the cluster, requiring TLS and
 potentially a credential reference for `tools/list` calls. The Backend resource
-itself has since landed as Implementable and shipped experimentally in Gateway
-API v1.6.0 ([GEP-4488](https://github.com/kubernetes-sigs/gateway-api/pull/4488)),
+itself has since landed as Experimental in Gateway
+API v1.6.0 ([GEP-4894](https://github.com/kubernetes-sigs/gateway-api/blob/main/geps/gep-4894/index.md)),
 with `MCP` as a named `BackendProtocol` value. What remains deferred is
 narrower: the MCP-specific protocol options and the credential mechanism for
 authenticated `tools/list` calls (e.g., a `credentialRef` on XToolInventory),
-which GEP-4488 leaves as future work.
+which GEP-4894 leaves as future work.
 
 ### Alternative: Separate Discovery Controller Binary
 
@@ -639,7 +639,7 @@ deferred pending Backend spec stabilization.
 - [KAN issue #161](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/161) — Service targeting on XBackend
 - [KAN issue #162](https://github.com/kubernetes-sigs/kube-agentic-networking/issues/162) — Path on XBackend
 - [KAN PR #182](https://github.com/kubernetes-sigs/kube-agentic-networking/pull/182) — Empty tool list deny-all semantics
-- [gateway-api GEP-4488](https://github.com/kubernetes-sigs/gateway-api/pull/4488) — Upstream Backend resource (Implementable; shipped experimentally in v1.6.0 with `MCP` as a named `BackendProtocol`)
+- [gateway-api GEP-4894](https://github.com/kubernetes-sigs/gateway-api/blob/main/geps/gep-4894/index.md) — Upstream Backend resource (Experimental; shipped in v1.6.0 with `MCP` as a named `BackendProtocol`)
 - [AI Gateway WG Proposal 10](https://github.com/kubernetes-sigs/wg-ai-gateway/blob/main/proposals/10-egress-gateways.md) — Egress gateways with MCP protocol support
 - [MCP Specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25) — Current MCP spec with tool annotations, pagination, schema requirements
 - [MCP SEP #2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) — TTL (`ttlMs`) freshness hints for list results
